@@ -1,3 +1,4 @@
+#include "Avc.h"
 #include <Wire.h>
 #include <TinyGPS.h>
 #include <Streaming.h>
@@ -7,22 +8,24 @@
 #include <LiquidCrystal.h>
 #include "AvcLcd.h"
 #include "AvcNav.h"
-#include "Avc.h"
 #include <EEPROM.h>
 #include "AvcMenu.h"
 #include <SoftwareSerial.h>
 #include <Servo.h>
 #include "Gps.h"
-
-#if !USE_SERVO_LIBRARY
-//  SoftwareSerial navSerial(RXPIN, TXPIN);
-#endif
+#include "AvcSettings.h"
+#include <AvcPath.h>
+#include <PString.h>
+#include "PathSetup.h"
 
 AvcNav *nav;
 AvcImu *imu;
 AvcLcd *lcd;
 AvcMenu *menu;
 Gps location;
+AvcSettings *settings;
+AvcPath *path;
+PathSetup* pathSetup;
 
 volatile unsigned long rotations = 0;
 volatile unsigned long previousOdometerMicros = 0;
@@ -32,15 +35,22 @@ unsigned long previousTime = 0;
 unsigned long fiftyHertzTime = 0;
 boolean andWereOff = false;
 
+#if LOG_TO_CARD
+  Print* logger = &Serial2;
+#else
+  Print* logger = &Serial;
+#endif
+
 void setup()
 {
-  Serial.begin(57600);
+  // usb
+  Serial.begin(115200);
+  // input from imu
   Serial1.begin(57600);
+  // logger output
   Serial2.begin(57600);
+  // GPS input (deprecated)
   Serial3.begin(9600);
-#if !USE_SERVO_LIBRARY
-  navSerial.begin(14400);
-#endif
   pinMode(SERVO_PIN, OUTPUT);
   pinMode(MENU_SELECT_PIN, INPUT);
   pinMode(MENU_SCROLL_PIN, INPUT);
@@ -53,23 +63,26 @@ void setup()
   digitalWrite(PUSH_BUTTON_START_PIN, HIGH);
   AvcEeprom::init();
   Gps::init(&Serial3);
-  nav = new AvcNav();
+  path = AvcPath::getPath(50);
+  settings = AvcSettings::getSettings();
+  nav = new AvcNav(path, settings);
   imu = new AvcImu();
-  lcd = new AvcLcd();
+  lcd = new AvcLcd(path);
   menu = new AvcMenu(lcd, nav);
+  pathSetup = new PathSetup();
   attachInterrupt(0, countRotations, CHANGE);
+#if LOG_EEPROM
   AvcEeprom::logEeprom();
+#endif
+#if LOG_NAV
+  nav->printHeading(*logger);
+#endif
+  
 }
 
 void loop() {
-//  Serial << "looping" << endl;
-#if USE_SERVO_LIBRARY
   while (Serial1.available()) {
     byte c = Serial1.read();
-#else
-  while (navSerial.available()) {
-    byte c = navSerial.read();
-#endif
 //    Serial.write(c);
     imu->parse(c);
     if (imu->isComplete()) {
@@ -93,14 +106,33 @@ void loop() {
             break;
           case AvcImu::MPU:
             nav->updateMpu(imu);
-            break;        }
+            break;
+          case AvcImu::GCM:
+            nav->updateMpu(imu);
+            nav->updateCompass(imu);
+            nav->updateGps(imu);
+            nav->updateSpeed(imu);
+            if (nav->isSampling()) {
+              nav->sample(lcd);
+              refreshLcd = true;
+            }
+#if TRACK_PATH_DISTANCES
+            nav->logPathDistances(*logger);
+#endif
+            break;
+          case AvcImu::CM:
+            nav->updateMpu(imu);
+            nav->updateCompass(imu);
+            nav->updateSpeed(imu);
+            break;
+        }
         if (!nav->isSampling()) {
           if (odometerMicrosDelta < 0) {
             odometerMicrosDelta = 4294967295 + odometerMicrosDelta;
           }
           nav->steer();
 #if LOG_NAV
-          nav->print();
+          nav->print(*logger);
 #endif
         }
       }
@@ -114,14 +146,13 @@ void loop() {
     if (nav->isSampling()) {
       nav->sample(lcd);
       refreshLcd = true;
-    }
-    if (!nav->isSampling()) {
+    } else {
       if (odometerMicrosDelta < 0) {
         odometerMicrosDelta = 4294967295 + odometerMicrosDelta;
       }
       nav->steer();
 #if LOG_NAV
-      nav->print();
+      nav->print(*logger);
 #endif
     }
     imu->reset();
@@ -129,7 +160,7 @@ void loop() {
   if (millis() - fiftyHertzTime > 20) {
     fiftyHertzTime = millis();
     if (!nav->isSampling()) {
-      nav->updateSpeed(odometerMicrosDelta * .000001);
+//      nav->updateSpeed(odometerMicrosDelta * .000001);
       if (PUSH_BUTTON_START && !andWereOff) {
         if (digitalRead(PUSH_BUTTON_START_PIN) == LOW) {
           andWereOff = true;
@@ -143,14 +174,17 @@ void loop() {
     }
   }
   unsigned long mls = millis();
-  if ((mls - previousTime) > (1000 / LOOP_SPEED) && nav->getOdometerSpeed() < 1) {
-    previousTime = mls;
-    lcd->display();
-    if (!nav->isSampling()) {
-      menu->checkButtons(refreshLcd);
-      refreshLcd = false;
+  if (nav->getOdometerSpeed() == 0) {
+    if ((mls - previousTime) > (1000 / LOOP_SPEED)) {
+      previousTime = mls;
+      lcd->display();
+      if (!nav->isSampling()) {
+        menu->checkButtons(refreshLcd);
+        refreshLcd = false;
+      }
     }
-  }  
+    pathSetup->updateCommandIO (&Serial, path);
+  }
 }
 
 void countRotations () {
