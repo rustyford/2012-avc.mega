@@ -48,6 +48,9 @@ void AvcMenu::checkButtons (boolean refresh) {
     lcd->setMode(lcd->NONE);
   } else if (button == MENU_SELECT_PIN) {
     switch(currentMenu) {
+      case GPS:
+        nav->updateWaypoints();
+        break;
       case SAMPLE:
         nav->startSampling(lcd);
         break;
@@ -60,9 +63,9 @@ void AvcMenu::checkButtons (boolean refresh) {
       case SPEED:
         nav->setMaxSpeed();
         break;
-      case OFFSET:
-        nav->setOffset();
-        break;
+//      case OFFSET:
+//        nav->setOffset();
+//        break;
       case MENU_RUN_LOC:
         nav->nextRunLocation();
         break;
