@@ -1,6 +1,8 @@
 #include "AvcNav.h"
 
-AvcNav::AvcNav (): pid() {
+AvcNav::AvcNav (AvcPath* avcpath, AvcSettings* avcsettings): pid() {
+  path = avcpath;
+  settings = avcsettings;
   latitude = 0;
   longitude = 0;
   hdop = 0;
@@ -21,7 +23,7 @@ AvcNav::AvcNav (): pid() {
   gpsUpdated = false;
   previousPidOffset = 0;
   previousSteering = SERVO_CENTER;
-  runLocation = AvcEeprom::getRunLocation();
+  runLocation = 1;//AvcEeprom::getRunLocation();
   if (runLocation == 255) runLocation = 1;
   nextWaypoint = 0;
   updateWaypoints();
@@ -31,7 +33,7 @@ AvcNav::AvcNav (): pid() {
   speedServo.attach(MOTOR_PIN);
 #endif
   previousCte = 0;
-  maxSpeed = AvcEeprom::getMaxSpeed();
+  maxSpeed = settings->getMaximumSpeed();//AvcEeprom::getMaxSpeed();
   previousSpeed = 0;
   steerHeading = 0;
   startBreaking = false;
@@ -52,7 +54,7 @@ AvcNav::AvcNav (): pid() {
 }
 
 void AvcNav::updateWaypoints() {
-  numWaypointsSet = max(AvcEeprom::getWayCount(), 0);
+  numWaypointsSet = max(path->getNumberOfWaypointsSet(), 0);
 //#if SKIP_FIRST_WAYPOINT
 //  nextWaypoint = 1 % numWaypointsSet;
 //#else
@@ -65,8 +67,13 @@ void AvcNav::updateWaypoints() {
 //    }
 //  }
   nextWaypoint = 1;
-  AvcEeprom::readOffsetLatLon (nextWaypoint, &dLat, &dLon);
-  AvcEeprom::readOffsetLatLon (numWaypointsSet - 2, &sLat, &sLon);
+  dLat = path->getLatitude(nextWaypoint);
+  dLon = path->getLongitude(nextWaypoint);
+  sLat = path->getLatitude(0);
+  sLon = path->getLongitude(0);
+  killIt = false;
+//  AvcEeprom::readOffsetLatLon (nextWaypoint, &dLat, &dLon);
+//  AvcEeprom::readOffsetLatLon (numWaypointsSet - 2, &sLat, &sLon);
 }
 
 void AvcNav::pickWaypoint() {
@@ -86,15 +93,16 @@ void AvcNav::pickWaypoint() {
 #else
 //    if (distanceFromWaypoint < WAYPOINT_RADIUS || distanceFromStartWaypoint > distanceBetweenWaypoints) {
 #endif
-    if (distanceFromWaypoint < WAYPOINT_RADIUS/* || distanceFromStartWaypoint > distanceBetweenWaypoints*/) {
+    if (distanceFromWaypoint < WAYPOINT_RADIUS || distanceFromStartWaypoint > distanceBetweenWaypoints) {
 #if SPEED_THROUGH_TURN
       startSpeeding = true;
       speedingStartTime = millis();      
 #endif
       if (RACE_MODE) {
-        nextWaypoint = min(nextWaypoint + 1, numWaypointsSet);
+        nextWaypoint++;
         if (nextWaypoint == numWaypointsSet) {
           killIt = true;
+          nextWaypoint--;
         }
 //        nextWaypoint = (nextWaypoint + 1) % numWaypointsSet;
       } else {
@@ -106,7 +114,9 @@ void AvcNav::pickWaypoint() {
       startBreaking = false;
       sLat = dLat;
       sLon = dLon;
-      AvcEeprom::readOffsetLatLon (nextWaypoint, &dLat, &dLon);
+      dLat = path->getLatitude(nextWaypoint);
+      dLon = path->getLongitude(nextWaypoint);
+      //AvcEeprom::readOffsetLatLon (nextWaypoint, &dLat, &dLon);
       reorienting = true;
     }
   }
@@ -215,14 +225,10 @@ void AvcNav::steer () {
   logEkfData();
 #endif
 
-#if USE_SERVO_LIBRARY
 #if GO_STRAIGHT
   steeringServo.writeMicroseconds(SERVO_CENTER);
 #else
   steeringServo.writeMicroseconds(steering);
-#endif
-#else
-  analogWrite(SERVO_PIN, steering);
 #endif
 }
 
@@ -286,7 +292,9 @@ void AvcNav::sample (AvcLcd *lcd) {
   if (samples >= MAX_SAMPLES) {
     long lat = tempWaypoint->getLatitude();
     long lon = tempWaypoint->getLongitude();
-    AvcEeprom::writeLatLon (numWaypointsSet - 1, &lat, &lon);
+    path->addWaypoint(lat, lon);
+    path->writeToEeprom(50);
+//    AvcEeprom::writeLatLon (numWaypointsSet - 1, &lat, &lon);
     if (numWaypointsSet == 1) {
       dLat = lat;
       dLon = lon;
@@ -295,6 +303,7 @@ void AvcNav::sample (AvcLcd *lcd) {
       sLon = lon;
     } 
     delete tempWaypoint;
+    tempWaypoint = NULL;
     sampling = false;
     lcd->resetMode();
     return;
@@ -304,9 +313,10 @@ void AvcNav::sample (AvcLcd *lcd) {
 }
 
 void AvcNav::resetWaypoints() {
-  AvcEeprom::setWayCount(0);
-  AvcEeprom::setRunOffset (0, 0);
-  delete tempWaypoint;
+  path->resetWaypoints();
+//  AvcEeprom::setWayCount(0);
+//  AvcEeprom::setRunOffset (0, 0);
+//  delete tempWaypoint;
   waypointSamplingIndex = -1;
   numWaypointsSet = 0;
   nextWaypoint = 0;
@@ -320,7 +330,7 @@ void AvcNav::startSampling(AvcLcd *lcd) {
   }
   waypointSamplingIndex++;
   numWaypointsSet++;
-  AvcEeprom::setWayCount(numWaypointsSet);
+//  AvcEeprom::setWayCount(numWaypointsSet);
   sampling = true;
   samples = 0;
   tempWaypoint = new AvcGps();
@@ -348,6 +358,10 @@ void AvcNav::updateSpeed(float timeDelta) {
   odometerSpeed = (.1222 / 2.0) / timeDelta;
 }
 
+void AvcNav::updateSpeed(AvcImu *imu) {
+  odometerSpeed = imu->getOdometerSpeed();
+}
+
 void AvcNav::setSpeed(float fraction) {
 //  if (abs(previousSpeed - fraction) > .0001) {
     previousSpeed = fraction;
@@ -359,7 +373,7 @@ void AvcNav::setSpeed(float fraction) {
       p = min(fraction, 1.0);
     }
 #else
-    float p = constrain(fraction, 0.0, 1.0);
+    float p = constrain(fraction, -1.0, 1.0);
 #endif
     speedServo.writeMicroseconds(1500 + int(p * 500.0));
 //  }
@@ -368,12 +382,14 @@ void AvcNav::setSpeed(float fraction) {
 void AvcNav::setMaxSpeed() {
   float pot = AvcLcd::getPotSpeed(200);
   maxSpeed = pot;
-  AvcEeprom::setMaxSpeed(maxSpeed);
+  settings->setMaximumSpeed(maxSpeed);
+  settings->writeToEeprom();
+//  AvcEeprom::setMaxSpeed(maxSpeed);
 }
 
 void AvcNav::drive () {
   if (killIt) {
-    setSpeed(-1.0);
+    setSpeed(-0.5);
     return;
   }
 #if BREAK_BEFORE_TURN
@@ -394,7 +410,7 @@ void AvcNav::drive () {
 #endif
   if (maxSpeed > 0) {
     if (rampUpSpeed && previousRampUpSpeed < maxSpeed) {
-      previousRampUpSpeed = previousRampUpSpeed + RAMP_UP_FACTOR;
+      previousRampUpSpeed = min(previousRampUpSpeed + RAMP_UP_FACTOR, maxSpeed);
       setSpeed(previousRampUpSpeed);
     } else {
       setSpeed(maxSpeed);
@@ -491,30 +507,31 @@ int AvcNav::lineCircle() {
 #endif
 
 int AvcNav::getLatPotentialOffset () {
-  long eLat, eLon;
-  AvcEeprom::readLatLon(0, &eLat, &eLon);
+  long eLat = path->getLatitude(0);
+//  AvcEeprom::readLatLon(0, &eLat, &eLon);
   return latitude - eLat;
 }
 
 int AvcNav::getLonPotentialOffset () {
-  long eLat, eLon;
-  AvcEeprom::readLatLon(0, &eLat, &eLon);
+  long eLon = path->getLongitude(0);
+//  AvcEeprom::readLatLon(0, &eLat, &eLon);
   return longitude - eLon;
 }
 
-void AvcNav::setOffset () {
-  long eLat, eLon;
-  AvcEeprom::readLatLon(0, &eLat, &eLon);
-  int oLat, oLon;
-  oLat = latitude - eLat;
-  oLon = longitude - eLon;
-  AvcEeprom::setRunOffset(oLat, oLon);
-}
+//void AvcNav::setOffset () {
+//  long eLat = path->getLatitude(0);
+//  long eLon = path->getLongitude(0);
+////  AvcEeprom::readLatLon(0, &eLat, &eLon);
+//  int oLat, oLon;
+//  oLat = latitude - eLat;
+//  oLon = longitude - eLon;
+//  AvcEeprom::setRunOffset(oLat, oLon);
+//}
 
 void AvcNav::nextRunLocation () {
   runLocation = (runLocation + 1) % LOC_COUNT;
-  AvcEeprom::setRunLocation(runLocation);
-  runLocation = AvcEeprom::getRunLocation();
+//  AvcEeprom::setRunLocation(runLocation);
+//  runLocation = AvcEeprom::getRunLocation();
   updateWaypoints();
   pickWaypoint();
 }

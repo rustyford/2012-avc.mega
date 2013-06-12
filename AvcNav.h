@@ -8,8 +8,10 @@
 #include "Avc.h"
 #include "AvcPid.h"
 #include "AvcLcd.h"
-#include "AvcEeprom.h"
+//#include "AvcEeprom.h"
 #include "Gps.h"
+#include <AvcPath.h>
+#include "AvcSettings.h"
 
 #if USE_SERVO_LIBRARY
 #include <Servo.h>
@@ -30,6 +32,8 @@ class AvcNav {
   boolean waasLock;
   int heading;
   AvcGps *tempWaypoint;
+  AvcPath* path;
+  AvcSettings* settings;
   int waypointSamplingIndex;
   int numWaypointsSet;
   int nextWaypoint;
@@ -84,7 +88,6 @@ class AvcNav {
 
   float crossTrackError ();
   void pickWaypoint();
-  void updateWaypoints();
   int lineCircle(long,long,long,long,long,long);
   int lineCircle();
 
@@ -122,13 +125,14 @@ class AvcNav {
 #endif
 
 public:
-  AvcNav ();
+  AvcNav (AvcPath*, AvcSettings*);
   void steer ();
   void update (AvcImu*);
   void sample (AvcLcd*);
   void resetWaypoints();
   void startSampling(AvcLcd*);
   void updateSpeed(float);
+  void updateSpeed(AvcImu*);
   void updateCompass(AvcImu*);
   void updateGps(AvcImu*);
   //pass value between 0 and 1
@@ -137,13 +141,14 @@ public:
   void drive();
   int getLatPotentialOffset ();
   int getLonPotentialOffset ();
-  void setOffset ();
+//  void setOffset ();
   void nextRunLocation();
   void updateGps (Gps *loc);
   void updateMpu(AvcImu*);
   void setRampUpSpeed (boolean);
   void nuetral();
   void processCamera(AvcImu*);
+  void updateWaypoints();
 
   inline long getLatitude() {return latitude;}
   inline long getLongitude() {return longitude;}
@@ -156,6 +161,7 @@ public:
   inline boolean isSampling() {return sampling;}
   inline byte getNumWaypoints() {return numWaypointsSet;}
   inline float getOdometerSpeed() {return odometerSpeed;}
+  inline float getGpsSpeed() {return speed;}
   inline float getMaxSpeed() {return maxSpeed;}
   inline byte getRunLocation() {return runLocation;}
   inline int getCameraX1() { return cameraX1;}
@@ -164,14 +170,28 @@ public:
   inline int getCameraY2() { return cameraY2;}
   inline int getNextWaypoint() {return nextWaypoint;}
   inline int getHeadingToWaypoint () {
-    long lat,lon;
-    AvcEeprom::readLatLon (nextWaypoint, &lat, &lon);
+    long lat = path->getLatitude(nextWaypoint);
+    long lon = path->getLongitude(nextWaypoint);
+//    AvcEeprom::readLatLon (nextWaypoint, &lat, &lon);
     return (int) TinyGPS::course_to(toFloat(latitude), 0.0f, toFloat(lat), toFloat(lon - longitude));
   }
 
 #if LOG_NAV
-  inline void print() {
-    Serial << "NAV" << "\t" <<
+  inline void printHeading(Print& logger) {
+    logger << "NAV" << "\t" <<
+        "latitude" << "\t" <<
+        "longitude" << "\t" <<
+        "hdop" << "\t" <<
+        "distanceTraveled" << "\t" <<
+        "fixTime" << "\t" <<
+        "speed" << "\t" <<
+        "odometerSpeed" << "\t" <<
+        "waasLock" << "\t" <<
+        "heading" <<
+        endl;    
+  }
+  inline void print(Print &logger) {
+    logger << "NAV" << "\t" <<
         latitude << "\t" <<
         longitude << "\t" <<
         hdop << "\t" <<
@@ -185,11 +205,28 @@ public:
   }
 #endif
 
+#if TRACK_PATH_DISTANCES
+  inline void logPathDistances(Print &logger) {
+    float distanceFromWaypoint = TinyGPS::distance_between(toFloat(latitude), 0.0f, 
+        toFloat(dLat), toFloat(dLon - longitude));
+    float distanceBetweenWaypoints = TinyGPS::distance_between(toFloat(sLat), 0.0f, 
+        toFloat(dLat), toFloat(dLon - sLon));
+    float distanceFromStartWaypoint = TinyGPS::distance_between(toFloat(sLat), 0.0f, 
+        toFloat(latitude), toFloat(longitude - sLon));
+    logger << nextWaypoint << "\t" <<
+        numWaypointsSet << "\t" <<
+        distanceFromWaypoint << "\t" <<
+        distanceBetweenWaypoints << "\t" <<
+        distanceFromStartWaypoint << "\t"<<
+    endl;
+  }
+#endif
   inline void printWaypoints() {
     if (numWaypointsSet > 0) {
       for (int ii = 0; ii < numWaypointsSet; ii++) {
-        long lat, lon;
-        AvcEeprom::readLatLon (ii, &lat, &lon);
+        long lat = path->getLatitude(ii);
+        long lon = path->getLongitude(ii);
+//        AvcEeprom::readLatLon (ii, &lat, &lon);
         Serial << 
             lat << "\t" <<
             lon << "\t";
