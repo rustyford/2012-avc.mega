@@ -2,7 +2,7 @@
 #define Avc_h
 
 #define MAX_SAMPLES 50
-#define WAYPOINT_RADIUS 3.0 // meters
+#define WAYPOINT_RADIUS 5.0 // meters
 
 #define LOOP_SPEED 40 //Hertz
 
@@ -17,21 +17,24 @@
 #define PUSH_BUTTON_START_PIN A2
 
 #define COMPASS_ONLY 1
+#define LOG_TO_CARD 1
 #define LOG_PID 0
 #define LOG_HEADING 0
 #define LOG_IMU 0
 #define LOG_NAV 0
 #define LOG_MAPPER 0
-#define LOG_EKF 1
+#define LOG_EKF 0
+#define LOG_EEPROM 0
+#define TRACK_PATH_DISTANCES 0
 #define DISTANCE_FROM_LINE_CORRECTION 0
 #define USE_SERVO_LIBRARY 1
 #define GO_STRAIGHT 0
 #define USE_LINE_INTERSECT 1
 #define RESET_RUN_LOCATIONS 0
 #define AGRESSIVE_STEERING 1
-#define RACE_MODE 0
+#define RACE_MODE 1
 #define BREAK_BEFORE_TURN 0
-#define PUSH_BUTTON_START 0
+#define PUSH_BUTTON_START 1
 #define SPEED_THROUGH_TURN 1
 #define EVASIVE_ACTION 0
 #define SKIP_FIRST_WAYPOINT 0
