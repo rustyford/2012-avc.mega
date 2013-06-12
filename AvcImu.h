@@ -11,7 +11,8 @@
 
 class AvcImu {
 public:
-  enum Mode {IMU, GPS, COMPASS, CAMERA, MPU};
+  enum Mode {IMU, GPS, COMPASS, CAMERA, MPU, GCM, CM};
+  // GCM = GPS,COMPASS,MPU | CM = COMPASS,MPU
 
 private:
   long latitude;
@@ -31,6 +32,7 @@ private:
   byte xOffset;
   byte yOffset;
   byte zOffset;
+  float odometerSpeed;
   int cameraX1;
   int cameraY1;
   int cameraX2;
@@ -59,6 +61,7 @@ public:
   inline boolean hasWaasLock() {return waasLock;}
   inline int getHeading() {return heading;}
   inline Mode getMode() {return mode;}
+  inline float getOdometerSpeed() {return odometerSpeed;}
   inline int getCameraX1() {return cameraX1;}
   inline int getCameraY1() {return cameraY1;}
   inline int getCameraX2() {return cameraX2;}

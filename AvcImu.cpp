@@ -48,6 +48,10 @@ void AvcImu::parse (char c) {
               mode = CAMERA;
             } else if (strcmp(pch, "MPU") == 0) {
               mode = MPU;
+            } else if (strcmp(pch, "GCM") == 0) {
+              mode = GCM;
+            } else if (strcmp(pch, "CM") == 0) {
+              mode = CM;
             } else {
               mode = IMU;
               latitude = atol(pch);
@@ -64,6 +68,10 @@ void AvcImu::parse (char c) {
               cameraX1 = atol(pch);
             } else if (mode == MPU) {
               accelX = atoi(pch);
+            } else if (mode == GCM) {
+              latitude = atol(pch);
+            } else if (mode == CM) {
+              heading = atoi(pch);
             }
             break;
           case 2:
@@ -77,6 +85,10 @@ void AvcImu::parse (char c) {
               cameraY1 = atol(pch);
             } else if (mode == MPU) {
               accelY = atoi(pch);
+            } else if (mode == GCM) {
+              longitude = atol(pch);
+            } else if (mode == CM) {
+              xOffset = atoi(pch);
             }
             break;
           case 3:
@@ -90,6 +102,10 @@ void AvcImu::parse (char c) {
               cameraX2 = atol(pch);
             } else if (mode == MPU) {
               accelZ = atoi(pch);
+            } else if (mode == GCM) {
+              hdop = atof(pch);
+            } else if (mode == CM) {
+              yOffset = atoi(pch);
             }
             break;
           case 4:
@@ -103,6 +119,10 @@ void AvcImu::parse (char c) {
               cameraY2 = atol(pch);
             } else if (mode == MPU) {
               gyroX = atoi(pch);
+            } else if (mode == GCM) {
+              distanceTraveled = atof(pch);
+            } else if (mode == CM) {
+              zOffset = atoi(pch);
             }
             break;
           case 5:
@@ -112,6 +132,10 @@ void AvcImu::parse (char c) {
               speed = atof(pch);
             } else if (mode == MPU) {
               gyroY = atoi(pch);
+            } else if (mode == GCM) {
+              fixTime = atol(pch);
+            } else if (mode == CM) {
+              accelX = atoi(pch);
             }
             break;
           case 6:
@@ -121,6 +145,10 @@ void AvcImu::parse (char c) {
               waasLock = atoi(pch);
             } else if (mode == MPU) {
               gyroZ = atoi(pch);
+            } else if (mode == GCM) {
+              speed = atof(pch);
+            } else if (mode == CM) {
+              accelY = atoi(pch);
             }
             break;
           case 7:
@@ -130,6 +158,80 @@ void AvcImu::parse (char c) {
               heading = atoi(pch);
             } else if (mode == MPU) {
               temp = atoi(pch);
+            } else if (mode == GCM) {
+              waasLock = atoi(pch);
+            } else if (mode == CM) {
+              accelZ = atoi(pch);
+            }
+            break;
+          case 8:
+            if (mode == GCM) {
+              heading = atoi(pch);
+            } else if (mode == CM) {
+              gyroX = atoi(pch);
+            }
+            break;
+          case 9:
+            if (mode == GCM) {
+              xOffset = atoi(pch);
+            } else if (mode == CM) {
+              gyroY = atoi(pch);
+            }
+            break;
+          case 10:
+            if (mode == GCM) {
+              yOffset = atoi(pch);
+            } else if (mode == CM) {
+              gyroZ = atoi(pch);
+            }
+            break;
+          case 11:
+            if (mode == GCM) {
+              zOffset = atoi(pch);
+            } else if (mode == CM) {
+              temp = atoi(pch);
+            }
+            break;
+          case 12:
+            if (mode == GCM) {
+              accelX = atoi(pch);
+            } else if (mode == CM) {
+              odometerSpeed = atof(pch);
+            }
+            break;
+          case 13:
+            if (mode == GCM) {
+              accelY = atoi(pch);
+            }
+            break;
+          case 14:
+            if (mode == GCM) {
+              accelZ = atoi(pch);
+            }
+            break;
+          case 15:
+            if (mode == GCM) {
+              gyroX = atoi(pch);
+            }
+            break;
+          case 16:
+            if (mode == GCM) {
+              gyroY = atoi(pch);
+            }
+            break;
+          case 17:
+            if (mode == GCM) {
+              gyroZ = atoi(pch);
+            }
+            break;
+          case 18:
+            if (mode == GCM) {
+              temp = atoi(pch);
+            }
+            break;
+          case 19:
+            if (mode == GCM) {
+              odometerSpeed = atof(pch);
             }
             break;
         }
@@ -157,6 +259,7 @@ void AvcImu::reset () {
   charCount = 0;
   invalid  = false;
   objectComplete = false;
+  odometerSpeed = 0.0;
   mode = IMU;
   xOffset = 0;
   yOffset = 0;
