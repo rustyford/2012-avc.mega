@@ -1,6 +1,6 @@
 #include "AvcLcd.h"
 
-AvcLcd::AvcLcd (): lcd(0) {
+AvcLcd::AvcLcd (AvcPath* avcpath): lcd(0) {
   // set up the LCD's number of rows and columns: 
   lcd.begin(16, 2);
   time = 0;
@@ -9,6 +9,7 @@ AvcLcd::AvcLcd (): lcd(0) {
   mode = NONE;
   previousMode = NONE;
   waypointIndex = 0;
+  path = avcpath;
 }
 
 void AvcLcd::setMode (Mode m) {
@@ -107,13 +108,9 @@ void AvcLcd::waypointSlideshow () {
     lcd.setBacklight(HIGH);
   }
   if ((millis() - time) > 1000) {
-    byte count = AvcEeprom::getWayCount();
-    long lat, lon;
-    AvcEeprom::readLatLon (waypointIndex, &lat, &lon);
-    int latOffset, lonOffset;
-    AvcEeprom::getRunOffset (&latOffset, &lonOffset);
-    lat += latOffset;
-    lon += lonOffset;
+    byte count = path->getNumberOfWaypointsSet();
+    long lat = path->getLatitude(waypointIndex);
+    long lon = path->getLongitude(waypointIndex);
     lcd.home();
     lcd << _FLOAT(lat/1000000.0, 6);
     lcd.setCursor(0, 1);

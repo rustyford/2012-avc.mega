@@ -7,12 +7,13 @@
 #include <Wire.h>
 #include "Avc.h"
 #include "AvcEeprom.h"
+#include "AvcPath.h"
 
 class AvcLcd {
 public:
   enum Mode {NONE, SAMPLING, WAYPOINTS};
 
-  AvcLcd();
+  AvcLcd(AvcPath*);
   void printHello();
   void setMode(Mode);
   void display();
@@ -44,6 +45,7 @@ private:
   boolean backlit;
   Mode previousMode;
   byte waypointIndex;
+  AvcPath* path;
 
   void sampling();
   void waypointSlideshow ();
